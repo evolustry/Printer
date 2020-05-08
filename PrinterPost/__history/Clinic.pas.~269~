@@ -1,0 +1,155 @@
+unit Clinic;
+
+interface
+
+uses
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, IdBaseComponent, IdComponent,
+  IdCustomTCPServer, IdCustomHTTPServer, IdHTTPServer, Vcl.StdCtrls, IdContext, shellapi, printers ;
+
+type
+  TPrintRec = record
+    Txt : String;
+    X   : Integer;
+    Y   : Integer;
+    Size: Integer;
+  end;
+  
+  TForm1 = class(TForm)
+    IdHTTPServer1: TIdHTTPServer;
+    PrinterSetupDialog1: TPrinterSetupDialog;
+    Button1: TButton;
+    PrintDialog1: TPrintDialog;
+    Memo1: TMemo;
+    procedure Button1Click(Sender: TObject);
+    procedure IdHTTPServer1CommandGet(AContext: TIdContext;
+      arequestinfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
+  private
+    { Private declarations }
+    PrintRec: array[0..10] of TPrintRec;
+    PrintRecCount: Integer;
+  public
+    { Public declarations }
+  end;
+
+var
+  Form1: TForm1;
+
+implementation
+
+{$R *.dfm}
+
+uses
+  IdURI;//Delphi中URL的編碼及解碼
+
+
+procedure TForm1.Button1Click(Sender: TObject);
+begin
+
+ PrinterSetupDialog1.Execute;
+end;
+
+procedure TForm1.IdHTTPServer1CommandGet(AContext: TIdContext;
+  arequestinfo: TIdHTTPRequestInfo; aresponseInfo: TIdHTTPResponseInfo);
+  var
+    strList : TStringList;
+    I ,J , K, p : Integer;
+    completestr, T, N ,V,Profile_T: string;
+  //  T :TStrings;
+    //=================
+      Size,X,Y,A: string;
+      E{等同p} : Integer; //抓 '='
+      H : array[0..2] of String;
+      comma1,comma2,Q,Font_Size,X_New,Y_New : Integer;
+
+      rectPage: TRect;
+      sText: string;
+      Comma:Integer;
+
+begin
+  PrintRecCount := 0;
+
+  strList := TStringList.Create;
+  strList.LoadFromFile('C:\Delphi_Project\ForClinic_Add Item Printer\porfile.txt', TEncoding.UTF8);
+  for I := 0 to strList.Count - 1  do//把每一行一筆一筆讀進來 t1=9,35,67 t2=......
+  begin
+    A := strList[I]; // A : t1=9,35,67
+    E := Pos('=', A);
+    Profile_T := copy(A, 1, E - 1);
+    A := copy(A, E + 1, Length(A) - E);
+    Q := 0;
+    while Length(A) > 0 do //會做到空，Length(A)裡面是空字串
+    begin
+      Comma := Pos(',', A);
+      if comma = 0 then
+      begin
+        H[2] := A;
+        //if A = '' then
+        Y := H[2];
+        A:='';
+        //break;
+      end
+      else
+      begin
+        H[Q] := Copy(A,1,Comma - 1); //用陣列去把抓到的值丟到陣列裡面
+        A := Copy(A,Comma + 1, Length(A) - Comma);
+        inc(Q);//Q := Q + 1;
+      end;
+    end;
+    Size := H[0];
+    X := H[1];
+    Font_Size := StrtoInt(Size) ;
+    X_New := StrtoInt(X);
+    Y_New := StrtoInt(Y);
+
+
+
+    for K := 2 to arequestinfo.Params.Count - 1 do  //分割網址t1，t2，t3
+    begin
+      T := TIdURI.URLDecode(arequestinfo.Params[K]);
+      p := Pos('=', T);
+      if p > 0 then
+      begin //假設t1=2020
+        N := Copy(T, 1, p - 1); //t1
+        V := Copy(T, p + 1, Length(T) - p);//2020
+      end;
+      if Profile_T = N then //N變t2時Profile_T還是抓t1
+      begin
+        //Printer
+        PrintRec[PrintRecCount].Txt := V;
+        //Add something size x y
+        PrintRec[PrintRecCount].Size := Font_Size;
+        PrintRec[PrintRecCount].X := X_New;
+        PrintRec[PrintRecCount].Y := Y_New;
+        inc(PrintRecCount);//這個迴圈做完+1
+      end;
+    end;
+    
+  end;
+
+
+  //with Printer do //加這一行代表 以下有Canvas的程式碼，Canvas的前面省略掉Printer
+  begin
+    //start printing
+    Printer.BeginDoc;//開始準備列印
+    
+    for I := 0 to PrintRecCount - 1 do
+    begin
+      rectPage := Rect(PrintRec[I].X , PrintRec[I].Y, Printer.PageWidth, Printer.PageHeight); //第一跟第二個參數單位pixel
+      sText := PrintRec[I].Txt;
+      //setting font details//
+      Printer.Canvas.Font.Name := 'Verdana';
+      Printer.Canvas.Font.Size := PrintRec[I].Size;
+      Printer.Canvas.Font.Color := clRed;
+      //draws the text to print//
+      Printer.Canvas.TextRect(rectPage, sText, [tfWordBreak]);
+      //finish printing
+      ShowMessage('Print is done.');
+    end;
+    
+    Printer.EndDoc; //把參數丟去列印
+  end;  
+end;
+
+
+end.
